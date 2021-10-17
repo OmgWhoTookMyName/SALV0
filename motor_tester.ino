@@ -44,6 +44,9 @@
   //Count variables for encoders
   int l_rot_count_raw, r_rot_count_raw;
   float l_rot_count, r_rot_count;
+
+  //Store the goal number of turns to achieve desired turn
+  float l_turn_count, r_turn_count;
   
 
   //Function used to run something every t interval in ms
@@ -98,13 +101,23 @@ void setup() {
 void loop() 
 {
   
-  l_rot_count = l_rot_count_raw / 6.0; 
-  r_rot_count = r_rot_count_raw / 6.0;
+    //Convert raw encoder data into countable rotations
+    l_rot_count = l_rot_count_raw / 6.0; 
+    r_rot_count = r_rot_count_raw / 6.0;
+    
+    
+    //If vehicle is stuck for 4 seconds, exit motor speed adjustment and call reverse function
+    runEvery(5){
+    int l_last_pulse = millis() - l_last_time;
+    int r_last_pulse = millis() - r_last_time;
+      if(l_last_pulse > 3000 && r_last_pulse > 3000){
 
-    //Serial.print("l_rot_count: ");
-    //Serial.println(l_rot_count);
- 
-
+        vehicleState = 5;
+        //Serial.print("This is the culprit");
+        
+        }
+    }
+    
 
  //<------- Diagnostics & Screen display ------->// 
   runEvery(100){
@@ -114,6 +127,8 @@ void loop()
   //Serial.println(motor_speed_left);
   //Serial.print("HeadingPosY: ");
   //Serial.println(HeadingPosY);
+
+    
 
   //Print Vehicle State to LCD display
   lcd.clear();
@@ -129,6 +144,8 @@ void loop()
             VehicleRightTurn();
             VehicleLeftTurn();
             VehicleReverse();
+            turnCounter();
+            motorSpdAdjust();
 */
 
     switch(vehicleState){
@@ -146,53 +163,10 @@ void loop()
         break;
       case 5:
         VehicleReverse();
-        break;     
+        break;
+      case 6:
+        turnCounter();    
     }
-
-//<------Update Vehicle Speed Via Encoders-------->//
-
-//Measure the time between pulses every 5ms;
-    runEvery(5){
-      int l_last_pulse = millis() - l_last_time;
-      int r_last_pulse = millis() - r_last_time;
-      //Serial.print("Pulse Time: ");
-      //Serial.println(last_pulse);
-      
-    
-//Update the motor speed if the pulse signal starts drift from given value
-if(l_last_pulse > 120 && motor_speed_left < 255)//TODO: Make the pulse width a variable
-    {
-      motor_speed_left = motor_speed_left + 1;
-      //Serial.print("Increasing");   
-    }
-if(l_last_pulse < 120 && motor_speed_left > 0)
-  {
-    motor_speed_left = motor_speed_left - 1;
-    //Serial.print("Decreasing");
-    
-  }
-if(r_last_pulse > 120 && motor_speed_right < 255)
-    {
-      motor_speed_left = motor_speed_right + 1;
-      //Serial.print("Increasing");
-      
-    }
-if(r_last_pulse < 120 && motor_speed_right > 0)
-  {
-    motor_speed_left = motor_speed_right - 1;
-    //Serial.print("Decreasing");
-    
-  }
-
-if(l_last_pulse > 4000 && r_last_pulse > 4000)
-{
-  vehicleState = 5;
-}
-
-
-
-  
-} 
 
 
 
@@ -217,39 +191,74 @@ distance= duration*0.034/2;
 //Serial.println(distance);
 
 
-
-
 //<------Methods of controlling Vehicle States-------->//
 
 //If you hit a wall going in the positive Y direction make a right 180 turn
-if(distance < 20 && HeadingPosY == true && distance > 10)
+if(distance < 20 && distance > 10)
 {
-  vehicleState = 3;
-
-}
-
-//If you hit a wall going in the negative Y direction make a left 180 turn
-if(distance < 20 && HeadingPosY == false && distance > 10)
-{
-  vehicleState = 4;
-
+  vehicleState = 6;
 }
 
 //If distance less than 10cm reverse and make a 180
 if(distance <= 10)
 {
-  
   vehicleState = 5;
-  
 }
   
- 
 }
+
+void motorSpdAdjust(){
+//<------Update Vehicle Speed Via Encoders-------->//
+
+//Measure the time between pulses every 5ms;
+    runEvery(5){
+      int l_last_pulse = millis() - l_last_time;
+      int r_last_pulse = millis() - r_last_time;
+      //Serial.print("Pulse Time: ");
+      //Serial.println(last_pulse);
+      //Serial.print("Left Pulse time: ");
+      //Serial.println(l_last_pulse);
+      //Serial.print("Right Pulse time: ");
+      //Serial.println(r_last_pulse);
+    
+
+  
+    //Update the motor speed if the pulse signal starts drift from given value
+    if(l_last_pulse > 60 && motor_speed_left < 255)//TODO: Make the pulse width a variable
+        {
+          motor_speed_left = motor_speed_left + 1;
+          //Serial.println("Increasing left");   
+        }
+    if(l_last_pulse < 60 && motor_speed_left > 0)
+      {
+        motor_speed_left = motor_speed_left - 1;
+        //Serial.println("Decreasing left");
+        
+      }
+    if(r_last_pulse > 60 && motor_speed_right < 255)
+        {
+          motor_speed_left = motor_speed_right + 1;
+          //Serial.println("Increasing right");
+          
+        }
+    if(r_last_pulse < 60 && motor_speed_right > 0)
+      {
+        motor_speed_left = motor_speed_right - 1;
+        //Serial.println("Decreasing right");
+      }
+
+} 
+  
+}
+
+
 
 
 //Vehice state 1
 void GoStraight(){
     
+    //Update motor speeds based on encoder values
+    motorSpdAdjust();
     //Set motor speeds
     analogWrite(5, motor_speed_left);       
     analogWrite(8, motor_speed_right);
@@ -285,53 +294,59 @@ void VehicleStop(){
 //Vehicle state 3
 void VehicleRightTurn(){
     //Store the current number of rotations and spin one wheel until 180 turn.
-    float l_turn_count = (l_rot_count_raw/6.0) + 2.0;  //TODO: 2.0 represents number of rotations to turn 180
+    
+    //float l_turn_count = (l_rot_count_raw/6.0) + 2.0;  //TODO: 2.0 represents number of rotations to turn 180
     
     VehicleStop();
 
-    while((l_rot_count_raw / 6.0) < l_turn_count){
-    digitalWrite(MOTOR_LEFT_IN1, HIGH);
-    digitalWrite(MOTOR_LEFT_IN2, LOW);
-    Serial.println((l_rot_count_raw / 6.0));
-    Serial.println(l_turn_count);
-    
+    if((l_rot_count_raw / 6.0) <= l_turn_count){
+      digitalWrite(MOTOR_LEFT_IN1, HIGH);
+      digitalWrite(MOTOR_LEFT_IN2, LOW);
+      //Serial.println((l_rot_count_raw / 6.0));
+      //Serial.println(l_turn_count);
     }
+    
     if((l_rot_count_raw / 6.0) >= l_turn_count)
     {
       HeadingPosY = false;
       VehicleStop();
       vehicleState = 1;
     }
- 
 }
 //Vehicle state 4
 void VehicleLeftTurn(){
     //Store the current number of rotations and spin one wheel until 180 turn.
-    float r_turn_count = (r_rot_count_raw/6.0) + 2.0;  //TODO: 2.0 represents number of rotations to turn 180
+    //float r_turn_count = (r_rot_count_raw/6.0) + 2.0;  //TODO: 2.0 represents number of rotations to turn 180
     
     VehicleStop();
 
-    while((r_rot_count_raw / 6.0) < r_turn_count){
+    if((r_rot_count_raw / 6.0) <= r_turn_count){
     digitalWrite(MOTOR_RIGHT_IN3, HIGH);
     digitalWrite(MOTOR_RIGHT_IN4, LOW);
-    Serial.print("Rotation Count: ");
-    Serial.println((r_rot_count_raw/6.0));
-    Serial.print("Goal Turn Count: ");
-    Serial.println(r_turn_count);
+    //Serial.print("Rotation Count: ");
+    //Serial.println((r_rot_count_raw/6.0));
+    //Serial.print("Goal Turn Count: ");
+    //Serial.println(r_turn_count);
     }
+   
     if((r_rot_count_raw / 6.0) >= r_turn_count)
     {
       HeadingPosY = true;
       VehicleStop();
       vehicleState = 1;
     }
+
+    return 0;
  
 }
 
 void VehicleReverse()
 {
 
+    //Reset motor states by stopping vehicle
     VehicleStop();
+
+    motorSpdAdjust();
     //Set motor speeds
     analogWrite(5, motor_speed_left);       
     analogWrite(8, motor_speed_right);
@@ -346,15 +361,28 @@ void VehicleReverse()
     digitalWrite(MOTOR_RIGHT_IN4, HIGH);
     
     delay(1000);
-    if(HeadingPosY == true)
-    {
-      vehicleState = 3;
-    }
-    else if(HeadingPosY == false)
-    {
-      vehicleState = 4;
-    }
+
+    vehicleState = 6;
   
+  
+}
+//Function used to set the number of tire rotations to achieve a turn
+void turnCounter()
+{
+  //Rotations to achieve specified turn degree
+  float turn_count_180 = 2.3;
+
+  
+  if(HeadingPosY == true){
+      l_turn_count = (l_rot_count_raw/6.0) + turn_count_180;
+      vehicleState = 3;
+    
+  }
+  else if (HeadingPosY == false){
+      r_turn_count = (r_rot_count_raw/6.0) + turn_count_180;
+      vehicleState = 4;
+    
+  }
   
 }
 
