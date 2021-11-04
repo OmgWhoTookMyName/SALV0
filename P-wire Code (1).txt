@@ -1,0 +1,31 @@
+int analogPin3 = A3;
+float V1 = 0;
+int delayTime = 200;
+int readVal;
+// NOTES: Solder wire tips, poor connection with pins (soldered wrong way), threshold code
+// goes in Raspberry Pi
+
+void setup() {
+
+  pinMode(analogPin3, INPUT);
+  Serial.begin(9600);
+
+}
+
+void loop() {
+
+
+readVal = analogRead(analogPin3); 
+V1 = (5./1023.)*readVal;
+// Analog input reads the voltage and outputs a scaled voltage between 0 and 1023 (10 bits) 2^10th
+// Actual V = 0, Analog read value (RV) = 0
+// Actual V = 5, RV = 1023
+// We need to do a calculation here
+// V1 = RV * (5/1023) which is the slope
+
+
+
+Serial.println(V1);
+delay(delayTime);
+
+}
